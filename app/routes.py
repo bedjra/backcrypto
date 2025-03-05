@@ -717,20 +717,26 @@ def get_transaction_details(transaction_id):
         beneficiaires_list = {}
         for fournisseur in fournisseurs:
             for beneficiaire in fournisseur.beneficiaires:
+                if beneficiaire.nom not in beneficiaires_list:
+                    beneficiaires_list[beneficiaire.nom] = {
+                        "commission_USDT": beneficiaire.commission_USDT,
+                        "benefice_FCFA": 0
+                    }
+                
                 benefice_beneficiaire = beneficiaire.commission_USDT * fournisseur.quantite_USDT
-
-                if beneficiaire.nom in beneficiaires_list:
-                    beneficiaires_list[beneficiaire.nom] += benefice_beneficiaire
-                else:
-                    beneficiaires_list[beneficiaire.nom] = benefice_beneficiaire
+                beneficiaires_list[beneficiaire.nom]["benefice_FCFA"] += benefice_beneficiaire
 
         # Construire la réponse
         response = {
             "calculs_en_temps_reel": {
                 "benefices_fournisseurs": fournisseurs_list,
                 "repartition_beneficiaires": [
-                    {"beneficiaire": nom, "benefice_FCFA": benefice}
-                    for nom, benefice in beneficiaires_list.items()
+                    {
+                        "beneficiaire": nom,
+                        "commission_USDT": data["commission_USDT"],
+                        "benefice_FCFA": data["benefice_FCFA"]
+                    }
+                    for nom, data in beneficiaires_list.items()
                 ],
                 "resume_global": {
                     "benefice_total_fournisseurs": total_benefice_fournisseurs,
@@ -744,7 +750,7 @@ def get_transaction_details(transaction_id):
     except Exception as e:
         print("🔥 Erreur serveur:", str(e))
         return jsonify({"message": "Erreur lors de la récupération", "error": str(e)}), 500
-
+    
 ##########################################################################################
 ##########################################################################################    
 ##########################################################################################

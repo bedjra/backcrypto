@@ -18,7 +18,7 @@ class Transaction(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     montant_FCFA = db.Column(db.Integer, nullable=False)  # Entier naturel
     taux_convenu = db.Column(db.Integer, nullable=False)  # Entier naturel
-    montant_USDT = db.Column(db.Numeric(10, 2), nullable=False)  # Deux chiffres après la virgule
+    montant_USDT = db.Column(db.Numeric(10, 0), nullable=False)  # Deux chiffres après la virgule
     date_transaction = db.Column(db.DateTime, default=db.func.current_timestamp())
 
     # Relation avec Fournisseur (1:N)
@@ -34,7 +34,7 @@ class Fournisseur(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nom = db.Column(db.String(100), nullable=False, unique=True)
     taux_jour = db.Column(db.Integer, nullable=False)  # Entier naturel
-    quantite_USDT = db.Column(db.Numeric(10, 2), nullable=False)  # Deux chiffres après la virgule
+    quantite_USDT = db.Column(db.Numeric(10, 0), nullable=False)  # Deux chiffres après la virgule
     transaction_id = db.Column(db.Integer, db.ForeignKey('transactions.id'), nullable=False)
 
     # Relation avec Beneficiaire (1:N)
@@ -49,7 +49,7 @@ class Beneficiaire(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     nom = db.Column(db.String(100), nullable=False)
-    commission_USDT = db.Column(db.Numeric(10, 2), nullable=False)  # Deux chiffres après la virgule
+    commission_USDT = db.Column(db.Numeric(10, 0), nullable=False)  # Deux chiffres après la virgule
     fournisseur_id = db.Column(db.Integer, db.ForeignKey('fournisseurs.id'), nullable=False)
 
     def __repr__(self):

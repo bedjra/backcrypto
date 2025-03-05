@@ -226,27 +226,25 @@ def get_all_transactions():
 
 ###############################################
 #######  Get 1 TRANSACTION ##################
-@main.route('/trans/<int:transaction_id>', methods=['GET'])
-def get_transaction_by_id(transaction_id):
-    # Rechercher la transaction par ID
-    transaction = Transaction.query.get(transaction_id)
+@main.route('/trans/<int:id>', methods=['GET'])
+def get_transaction_by_id(id):
+    try:
+        transaction = Transaction.query.get(id)
 
-    # Vérifier si la transaction existe
-    if not transaction:
-        return jsonify({"message": "Transaction non trouvée."}), 404
+        if not transaction:
+            return jsonify({'message': 'Transaction non trouvée'}), 404
 
-    # Formater la transaction pour la réponse JSON
-    transaction_data = {
-        "id": transaction.id,
-        "montantFCFA": str(transaction.montant_FCFA),  # Convertir en string pour JSON
-        "tauxConv": str(transaction.taux_convenu),
-        "montantUSDT": str(transaction.montant_USDT),
-        "dateTransaction": transaction.date_transaction.isoformat()  # Format ISO pour DateTime
-    }
+        return jsonify({
+            'id': transaction.id,
+            'montantFCFA': transaction.montant_FCFA,
+            'tauxConv': transaction.taux_convenu,
+            'montantUSDT': transaction.montant_USDT,
+            'dateTransaction': transaction.date_transaction.isoformat()
+        }), 200
 
-    # Retourner la transaction sous forme de JSON
-    return jsonify({"transaction": transaction_data}), 200
-
+    except Exception as e:
+        print("🔥 Erreur serveur:", str(e))
+        return jsonify({'message': 'Erreur interne', 'error': str(e)}), 500
 
 ##########################################################################################
 ##########################################################################################
@@ -590,6 +588,7 @@ def delete_fournisseur(id):
 
 
 
+
     
 ##########################################################################################
 ##########################################################################################    
@@ -651,68 +650,100 @@ def get_total_beneficiaires():
 ##########################################################################################
 ############## CALCUL ################## CALCUL ##################
 ############## CALCUL ################## CALCUL ##################
-@main.route('/calculer', methods=['POST'])
-def calculer():
-    data = request.json
-    montantFCFA = data.get('montantFCFA', 0)
-    tauxConvenu = data.get('tauxConvenu', 0)
-    tauxFournisseur = data.get('tauxFournisseur', 0)
-    quantiteUSDT = data.get('quantiteUSDT', 0)
-    commission = data.get('commission', 0)
+@main.route('/details/<int:transaction_id>', methods=['GET'])
+def get_fournisseurs_par_transaction(transaction_id):
+    try:
+        # Vérifier si la transaction existe
+        transaction = Transaction.query.get(transaction_id)
+        if not transaction:
+            return jsonify({"message": "Transaction non trouvée"}), 404
 
-    if tauxConvenu == 0:
-        return jsonify({"error": "Le taux convenu ne peut pas être zéro"}), 400
+        # Récupérer les fournisseurs liés à cette transaction
+        fournisseurs = Fournisseur.query.filter_by(transaction_id=transaction_id).all()
 
-    montantUSDT = montantFCFA / tauxConvenu
-    beneficeParUSDT = tauxConvenu - tauxFournisseur
-    beneficeTotalFCFA = beneficeParUSDT * quantiteUSDT
-    beneficeBeneficiaire = commission * quantiteUSDT
+        if not fournisseurs:
+            return jsonify({"message": "Aucun fournisseur trouvé pour cette transaction"}), 404
 
-    resultats = {
-        "montantUSDT": round(montantUSDT, 2),
-        "beneficeUSDT": round(beneficeParUSDT, 2),
-        "beneficeTotalFCFA": round(beneficeTotalFCFA, 2),
-        "beneficeBeneficiaire": round(beneficeBeneficiaire, 2),
-        "totalBenefice": round(beneficeTotalFCFA, 2),
-        "beneficeParBeneficiaire": round(beneficeBeneficiaire, 2)
-    }
-    
-    return jsonify(resultats)
+        # Construire la réponse avec les bénéficiaires
+        result = []
+        for fournisseur in fournisseurs:
+            result.append({
+                "id": fournisseur.id,
+                "nom": fournisseur.nom,
+                "taux_jour": fournisseur.taux_jour,
+                "quantite_USDT": fournisseur.quantite_USDT,
+                "transaction_id": fournisseur.transaction_id,
+                "beneficiaires": [
+                    {"id": b.id, "nom": b.nom, "commission_USDT": b.commission_USDT}
+                    for b in fournisseur.beneficiaires
+                ]
+            })
 
-############## CALCUL GET ALL  ##########
-@main.route('/cal', methods=['GET'])
-def getalltransactions():
-    transactions = Transaction.query.all()
-    results = [
-        {
-            "id": t.id,
-            "montantFCFA": t.montant_FCFA,
-            "tauxConvenu": t.taux_convenu,
-            "tauxFournisseur": t.taux_jour,
-            "quantiteUSDT": t.quantiteUSDT,
-            "commission": t.commission
+        return jsonify(result), 200
+
+    except Exception as e:
+        print("🔥 Erreur serveur:", str(e))
+        return jsonify({"message": "Erreur lors de la récupération", "error": str(e)}), 500
+
+
+@main.route("/cal/<int:transaction_id>", methods=["GET"])
+def get_transaction_details(transaction_id):
+    try:
+        # Vérifier si la transaction existe
+        transaction = Transaction.query.get(transaction_id)
+        if not transaction:
+            return jsonify({"message": "Transaction non trouvée"}), 404
+
+        # Récupérer les fournisseurs liés à cette transaction
+        fournisseurs = Fournisseur.query.filter_by(transaction_id=transaction_id).all()
+        if not fournisseurs:
+            return jsonify({"message": "Aucun fournisseur trouvé pour cette transaction"}), 404
+
+        # Calculs des bénéfices des fournisseurs
+        total_benefice_fournisseurs = 0
+        fournisseurs_list = []
+        for fournisseur in fournisseurs:
+            benefice_par_USDT = transaction.taux_convenu - fournisseur.taux_jour
+            benefice_total = benefice_par_USDT * fournisseur.quantite_USDT
+            total_benefice_fournisseurs += benefice_total
+
+            fournisseurs_list.append({
+                "fournisseur": fournisseur.nom,
+                "benefice_par_USDT": benefice_par_USDT,
+                "benefice_total_FCFA": benefice_total
+            })
+
+        # Calculs des bénéfices des bénéficiaires
+        beneficiaires_list = {}
+        for fournisseur in fournisseurs:
+            for beneficiaire in fournisseur.beneficiaires:
+                benefice_beneficiaire = beneficiaire.commission_USDT * fournisseur.quantite_USDT
+
+                if beneficiaire.nom in beneficiaires_list:
+                    beneficiaires_list[beneficiaire.nom] += benefice_beneficiaire
+                else:
+                    beneficiaires_list[beneficiaire.nom] = benefice_beneficiaire
+
+        # Construire la réponse
+        response = {
+            "calculs_en_temps_reel": {
+                "benefices_fournisseurs": fournisseurs_list,
+                "repartition_beneficiaires": [
+                    {"beneficiaire": nom, "benefice_FCFA": benefice}
+                    for nom, benefice in beneficiaires_list.items()
+                ],
+                "resume_global": {
+                    "benefice_total_fournisseurs": total_benefice_fournisseurs,
+                    "benefices_par_beneficiaire": beneficiaires_list
+                }
+            }
         }
-        for t in transactions
-    ]
-    return jsonify(results)
 
-############## CALCUL LES 3 DERNIERS ############    
-#@main.route('/transactions/last3', methods=['GET'])
-#def get_last_three_transactions():
-#    transactions = Transaction.query.order_by(Transaction.id.desc()).limit(3).all()
-    # results = [
-        # {
-            # "id": t.id,
-            # "montantFCFA": t.montantFCFA,
-    #         "tauxConvenu": t.tauxConvenu,
-    #         "tauxFournisseur": t.tauxFournisseur,
-    #         "quantiteUSDT": t.quantiteUSDT,
-    #         "commission": t.commission
-    #     }
-    #     for t in transactions
-    # ]
-    # return jsonify(results)
+        return jsonify(response), 200
 
+    except Exception as e:
+        print("🔥 Erreur serveur:", str(e))
+        return jsonify({"message": "Erreur lors de la récupération", "error": str(e)}), 500
 
 ##########################################################################################
 ##########################################################################################    
@@ -728,3 +759,54 @@ def getalltransactions():
 ##########################################################################################
 ############## HISTORIQUE ################## HISTORIQUE ##################
 ############## HISTORIQUE ################## HISTORIQUE ##################
+@main.route("/cal/all", methods=["GET"])
+def get_alltransactions():
+    try:
+        transactions = Transaction.query.all()
+        if not transactions:
+            return jsonify({"message": "Aucune transaction trouvée"}), 404
+
+        transactions_list = []
+        for transaction in transactions:
+            fournisseurs = Fournisseur.query.filter_by(transaction_id=transaction.id).all()
+            fournisseurs_list = []
+            beneficiaires_list = {}
+            total_benefice_fournisseurs = 0
+
+            for fournisseur in fournisseurs:
+                benefice_par_USDT = transaction.taux_convenu - fournisseur.taux_jour
+                benefice_total = benefice_par_USDT * fournisseur.quantite_USDT
+                total_benefice_fournisseurs += benefice_total
+
+                fournisseurs_list.append({
+                    "fournisseur": fournisseur.nom,
+                    "benefice_par_USDT": benefice_par_USDT,
+                    "benefice_total_FCFA": benefice_total
+                })
+
+                for beneficiaire in fournisseur.beneficiaires:
+                    benefice_beneficiaire = beneficiaire.commission_USDT * fournisseur.quantite_USDT
+                    if beneficiaire.nom in beneficiaires_list:
+                        beneficiaires_list[beneficiaire.nom] += benefice_beneficiaire
+                    else:
+                        beneficiaires_list[beneficiaire.nom] = benefice_beneficiaire
+
+            transactions_list.append({
+                "transaction_id": transaction.id,
+                "taux_convenu": transaction.taux_convenu,
+                "benefices_fournisseurs": fournisseurs_list,
+                "repartition_beneficiaires": [
+                    {"beneficiaire": nom, "benefice_FCFA": benefice}
+                    for nom, benefice in beneficiaires_list.items()
+                ],
+                "resume_global": {
+                    "benefice_total_fournisseurs": total_benefice_fournisseurs,
+                    "benefices_par_beneficiaire": beneficiaires_list
+                }
+            })
+
+        return jsonify({"transactions": transactions_list}), 200
+
+    except Exception as e:
+        print("🔥 Erreur serveur:", str(e))
+        return jsonify({"message": "Erreur lors de la récupération", "error": str(e)}), 500

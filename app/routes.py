@@ -783,3 +783,62 @@ def get_alltransactions():
     except Exception as e:
         print("🔥 Erreur serveur:", str(e))
         return jsonify({"message": "Erreur lors de la récupération", "error": str(e)}), 500
+
+##################################################
+############## get four et le taux ################## 
+
+@main.route('/four/taux', methods=['GET'])
+def get_fournisseurs():
+    try:
+        fournisseurs = Fournisseur.query.order_by(Fournisseur.id).all()
+        result = [
+            {
+                "id": fournisseur.id,
+                "nom": fournisseur.nom,
+                "taux_jour": float(fournisseur.taux_jour)
+            }
+            for fournisseur in fournisseurs
+        ]
+
+        return jsonify({
+            "message": "Liste des fournisseurs récupérée avec succès",
+            "fournisseurs": result
+        }), 200
+
+    except Exception as e:
+        return jsonify({"message": "Erreur lors de la récupération des fournisseurs", "error": str(e)}), 500
+    
+    
+ 
+@main.route('/benef/all', methods=['GET'])
+def get_all_beneficiaires():
+    try:
+        beneficiaires = Beneficiaire.query.all()
+        if not beneficiaires:
+            return jsonify({"message": "Aucun bénéficiaire trouvé"}), 404
+
+        beneficiaires_list = []
+        for beneficiaire in beneficiaires:
+            fournisseur = Fournisseur.query.get(beneficiaire.fournisseur_id)
+            transaction = Transaction.query.get(fournisseur.transaction_id) if fournisseur else None
+
+            if not fournisseur or not transaction:
+                continue
+
+            benefice_beneficiaire = beneficiaire.commission_USDT * fournisseur.quantite_USDT
+
+            beneficiaires_list.append({
+                "id": beneficiaire.id,
+                "nom": beneficiaire.nom,
+                "commission_USDT": float(beneficiaire.commission_USDT),
+                "benefice_FCFA": benefice_beneficiaire
+            })
+
+        return jsonify({
+            "message": "Liste des bénéficiaires récupérée avec succès",
+            "beneficiaires": beneficiaires_list
+        }), 200
+
+    except Exception as e:
+        print("🔥 Erreur serveur:", str(e))
+        return jsonify({"message": "Erreur lors de la récupération des bénéficiaires", "error": str(e)}), 500

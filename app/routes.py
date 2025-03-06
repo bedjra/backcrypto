@@ -754,10 +754,11 @@ def get_transaction_details(transaction_id):
 #########################################################################################
 ############## HISTORIQUE ################## HISTORIQUE ##################
 ############## HISTORIQUE ################## HISTORIQUE ##################
+
 @main.route("/cal/all", methods=["GET"])
 def get_alltransactions():
     try:
-        transactions = Transaction.query.all()
+        transactions = Transaction.query.order_by(Transaction.id.asc()).all()  # Tri par ID croissant
         if not transactions:
             return jsonify({"message": "Aucune transaction trouvée"}), 404
 
@@ -788,7 +789,9 @@ def get_alltransactions():
 
             transactions_list.append({
                 "transaction_id": transaction.id,
+                "date_transaction": transaction.date_transaction.strftime("%Y-%m-%d"),
                 "taux_convenu": transaction.taux_convenu,
+                "montant_FCFA": transaction.montant_FCFA,  # Ajout du champ montant_FCFA
                 "benefices_fournisseurs": fournisseurs_list,
                 "repartition_beneficiaires": [
                     {"beneficiaire": nom, "benefice_FCFA": benefice}
@@ -808,7 +811,6 @@ def get_alltransactions():
 
 ##################################################
 ############## get four et le taux ################## 
-
 @main.route('/four/taux', methods=['GET'])
 def get_fournisseurs():
     try:
@@ -864,9 +866,7 @@ def get_all_beneficiaires():
     except Exception as e:
         print("🔥 Erreur serveur:", str(e))
         return jsonify({"message": "Erreur lors de la récupération des bénéficiaires", "error": str(e)}), 500
-    
-    
-    
+      
 ###################################################################################################
 #historique ###################################################################################################
 

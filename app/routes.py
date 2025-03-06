@@ -5,6 +5,7 @@ from app.models import Transaction , Fournisseur , Beneficiaire
 from werkzeug.security import check_password_hash
 from werkzeug.security import generate_password_hash
 from datetime import datetime
+from sqlalchemy import desc
 
 main = Blueprint('main', __name__) 
 
@@ -622,6 +623,27 @@ def get_total_beneficiaires():
 
 
 
+#######################################################
+#######  Get all BENEFICE TOTAL ##################
+@main.route('/total/been', methods=['GET'])
+def gettotalbenefice():
+    try:
+        transactions = Transaction.query.all()
+        if not transactions:
+            return jsonify({"message": "Aucune transaction trouvée", "benefice_global_total": 0}), 404
+
+        total_benefice = 0
+        for transaction in transactions:
+            fournisseurs = Fournisseur.query.filter_by(transaction_id=transaction.id).all()
+            for fournisseur in fournisseurs:
+                benefice_fournisseur = (transaction.taux_convenu - fournisseur.taux_jour) * fournisseur.quantite_USDT
+                total_benefice += benefice_fournisseur
+
+        return jsonify({"benefice_global_total": total_benefice}), 200
+
+    except Exception as e:
+        print("🔥 Erreur serveur:", str(e))
+        return jsonify({"message": "Erreur lors de la récupération du bénéfice total", "error": str(e)}), 500
 
 
 #######################################################################################
@@ -842,3 +864,91 @@ def get_all_beneficiaires():
     except Exception as e:
         print("🔥 Erreur serveur:", str(e))
         return jsonify({"message": "Erreur lors de la récupération des bénéficiaires", "error": str(e)}), 500
+    
+    
+    
+###################################################################################################
+#historique ###################################################################################################
+
+@main.route("/acc", methods=["GET"])
+def get_acctransactions():
+    try:
+        transactions = Transaction.query.all()
+        if not transactions:
+            return jsonify({"message": "Aucune transaction trouvée"}), 404
+
+        transactions_list = []
+        for transaction in transactions:
+            fournisseurs = Fournisseur.query.filter_by(transaction_id=transaction.id).all()
+            total_benefice = 0
+            fournisseurs_list = []
+
+            for fournisseur in fournisseurs:
+                benefice_fournisseur = (transaction.taux_convenu - fournisseur.taux_jour) * fournisseur.quantite_USDT
+                total_benefice += benefice_fournisseur
+
+                fournisseurs_list.append({
+                    "id": fournisseur.id,
+                    "nom": fournisseur.nom
+                })
+
+            transactions_list.append({
+                "date": transaction.date_transaction.strftime("%Y-%m-%d"),  # Formatage de la date
+                "montant_FCFA": transaction.montant_FCFA,
+                "fournisseurs": fournisseurs_list,
+                "benefice_total": total_benefice
+            })
+
+        return jsonify({
+            "message": "Liste des transactions récupérée avec succès",
+            "transactions": transactions_list
+        }), 200
+
+    except Exception as e:
+        print("🔥 Erreur serveur:", str(e))
+        return jsonify({"message": "Erreur lors de la récupération des transactions", "error": str(e)}), 500
+
+
+####################################################################################################
+####################################################################################################
+# Récupérer les 3 dernières transactions en les triant par date décroissante
+@main.route("/acc/last", methods=["GET"])
+def get_acclasttransactions():
+    try:
+        # Récupérer les 3 dernières transactions en les triant par date décroissante
+        transactions = Transaction.query.order_by(desc(Transaction.date_transaction)).limit(3).all()
+        if not transactions:
+            return jsonify({"message": "Aucune transaction trouvée"}), 404
+
+        transactions_list = []
+        for transaction in transactions:
+            fournisseurs = Fournisseur.query.filter_by(transaction_id=transaction.id).all()
+            total_benefice = 0
+            fournisseurs_list = []
+
+            for fournisseur in fournisseurs:
+                benefice_fournisseur = (transaction.taux_convenu - fournisseur.taux_jour) * fournisseur.quantite_USDT
+                total_benefice += benefice_fournisseur
+
+                fournisseurs_list.append({
+                    "id": fournisseur.id,
+                    "nom": fournisseur.nom
+                })
+
+            transactions_list.append({
+                "date": transaction.date_transaction.strftime("%Y-%m-%d à  %H:%M:%S"),  # Ajout de l'heure
+                "montant_FCFA": transaction.montant_FCFA,
+                "fournisseurs": fournisseurs_list,
+                "benefice_total": total_benefice
+            })
+
+        transactions_list.reverse()  # Inverser l'ordre pour afficher 1 -> 2 -> 3
+
+        return jsonify({
+            "message": "Dernières transactions récupérées avec succès",
+            "transactions": transactions_list
+        }), 200
+
+    except Exception as e:
+        print("🔥 Erreur serveur:", str(e))
+        return jsonify({"message": "Erreur lors de la récupération des transactions", "error": str(e)}), 500

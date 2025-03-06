@@ -754,11 +754,59 @@ def get_transaction_details(transaction_id):
 #########################################################################################
 ############## HISTORIQUE ################## HISTORIQUE ##################
 ############## HISTORIQUE ################## HISTORIQUE ##################
-
 @main.route("/cal/all", methods=["GET"])
 def get_alltransactions():
     try:
-        transactions = Transaction.query.order_by(Transaction.id.asc()).all()  # Tri par ID croissant
+        periode = request.args.get("periode", "jour")  # Récupère la période demandée
+        today = datetime.today()
+
+        if periode == "jour":
+            start_date = today.replace(hour=0, minute=0, second=0, microsecond=0)
+        elif periode == "7jours":
+            start_date = today - timedelta(days=7)
+        elif periode == "mois":
+            start_date = today.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        elif periode == "annee":
+            start_date = today.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        else:
+            return jsonify({"message": "Période invalide"}), 400
+
+        transactions = Transaction.query.filter(Transaction.date_transaction >= start_date).order_by(Transaction.id.asc()).all()
+        
+        # (Le reste du code reste inchangé)
+
+        return jsonify({"transactions": transactions_list}), 200
+
+    except Exception as e:
+        print("🔥 Erreur serveur:", str(e))
+        return jsonify({"message": "Erreur lors de la récupération", "error": str(e)}), 500
+
+
+
+@main.route("/cal/peri", methods=["GET"])
+def getalltransactionsperio():
+    try:
+        periode = request.args.get("periode")  # Récupération du paramètre (jour, mois, annee)
+        
+        # Date du jour
+        today = datetime.today().date()
+
+        # Filtrage en fonction de la période
+        if periode == "jour":
+            start_date = today
+        elif periode == "mois":
+            start_date = today.replace(day=1)  # Début du mois en cours
+        elif periode == "annee":
+            start_date = today.replace(month=1, day=1)  # Début de l'année en cours
+        else:
+            start_date = None  # Si aucun filtre, récupérer toutes les transactions
+
+        # Récupération des transactions avec filtre de date
+        if start_date:
+            transactions = Transaction.query.filter(Transaction.date_transaction >= start_date).order_by(Transaction.id.asc()).all()
+        else:
+            transactions = Transaction.query.order_by(Transaction.id.asc()).all()
+
         if not transactions:
             return jsonify({"message": "Aucune transaction trouvée"}), 404
 
@@ -791,7 +839,7 @@ def get_alltransactions():
                 "transaction_id": transaction.id,
                 "date_transaction": transaction.date_transaction.strftime("%Y-%m-%d"),
                 "taux_convenu": transaction.taux_convenu,
-                "montant_FCFA": transaction.montant_FCFA,  # Ajout du champ montant_FCFA
+                "montant_FCFA": transaction.montant_FCFA,
                 "benefices_fournisseurs": fournisseurs_list,
                 "repartition_beneficiaires": [
                     {"beneficiaire": nom, "benefice_FCFA": benefice}

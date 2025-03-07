@@ -754,7 +754,6 @@ def get_transaction_details(transaction_id):
 #########################################################################################
 ############## HISTORIQUE ################## HISTORIQUE ##################
 ############## HISTORIQUE ################## HISTORIQUE ##################
-
 @main.route("/cal/peri", methods=["GET"])
 def getalltransactionsperio():
     try:
@@ -812,6 +811,7 @@ def getalltransactionsperio():
                 "date_transaction": transaction.date_transaction.strftime("%Y-%m-%d"),
                 "taux_convenu": transaction.taux_convenu,
                 "montant_FCFA": transaction.montant_FCFA,
+                "montant_USDT": float(transaction.montant_USDT),  
                 "benefices_fournisseurs": fournisseurs_list,
                 "repartition_beneficiaires": [
                     {"beneficiaire": nom, "benefice_FCFA": benefice}
@@ -829,6 +829,10 @@ def getalltransactionsperio():
         print("🔥 Erreur serveur:", str(e))
         return jsonify({"message": "Erreur lors de la récupération", "error": str(e)}), 500
 
+
+
+
+ 
 ##################################################
 ############## get four et le taux ################## 
 @main.route('/four/taux', methods=['GET'])

@@ -1,0 +1,176 @@
+##########################################################################################
+##########################################################################################
+@main.route('/save', methods=['POST'])
+def save_user():
+    data = request.json
+    email = data.get('email')
+    password = data.get('password')
+
+    if not email or not password:
+        return jsonify({"message": "Email et mot de passe sont requis !"}), 400
+
+    # Vérifier si l'utilisateur existe déjà
+    existing_user = User.query.filter_by(email=email).first()
+    if existing_user:
+        return jsonify({"message": "Cet email est déjà utilisé !"}), 409
+
+    # Hachage du mot de passe
+    hashed_password = generate_password_hash(password)
+
+    # Création et sauvegarde du nouvel utilisateur
+    new_user = User(email=email, password=hashed_password)
+    db.session.add(new_user)
+    db.session.commit()
+
+    return jsonify({"message": "Utilisateur enregistré avec succès !"}), 201
+
+
+####### utilisateur login ##################
+@main.route('/login', methods=['POST'])
+def login_user():
+    data = request.json
+    email = data.get('email')
+    password = data.get('password')
+
+    # Trouver l'utilisateur par email
+    user = User.query.filter_by(email=email).first()
+
+    # Si l'utilisateur n'existe pas ou le mot de passe est incorrect
+    if user and check_password_hash(user.password, password):
+        return jsonify({"message": "Connexion réussie !"}), 200
+    else:
+        return jsonify({"message": "Email ou mot de passe incorrect !"}), 401
+
+
+###############################################
+#######  Get all utilisateur ##################
+@main.route('/user', methods=['GET'])
+def get_user():
+    email = request.args.get('email')  # Récupère l'email passé en paramètre de requête
+    
+    # Trouver l'utilisateur par email
+    user = User.query.filter_by(email=email).first()
+
+    if user:
+        # Si l'utilisateur existe, renvoyer ses informations
+        return jsonify({
+            "id": user.id,
+            "email": user.email,
+        }), 200
+    else:
+        # Si l'utilisateur n'existe pas
+        return jsonify({"message": "Utilisateur non trouvé !"}), 404 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+##########################################################################################
+#######################  Inscription d'un utilisateur  ###################################
+@main.route('/save', methods=['POST'])
+def register():
+    data = request.json
+    email = data.get('email')
+    password = data.get('password')
+
+    if not email or not password:
+        return jsonify({"message": "Email et mot de passe sont requis !"}), 400
+
+    existing_user = User.query.filter_by(email=email).first()
+    if existing_user:
+        return jsonify({"message": "Cet email est déjà utilisé !"}), 409
+
+    hashed_password = generate_password_hash(password)
+    new_user = User(email=email, password=hashed_password)
+    db.session.add(new_user)
+    db.session.commit()
+
+    return jsonify({"message": "Utilisateur enregistré avec succès !"}), 201
+
+##########################################################################################
+######################## Connexion utilisateur ###########################################
+@main.route('/login', methods=['POST'])
+def login():
+    data = request.json
+    email = data.get('email')
+    password = data.get('password')
+
+    user = User.query.filter_by(email=email).first()
+    if user and check_password_hash(user.password, password):
+        access_token = create_access_token(identity=user.id, expires_delta=timedelta(hours=1))
+        return jsonify({"message": "Connexion réussie !", "token": access_token}), 200
+    else:
+        return jsonify({"message": "Email ou mot de passe incorrect !"}), 401
+
+##########################################################################################
+######################## Récupération des infos utilisateur ##############################
+@main.route('/user', methods=['GET'])
+@jwt_required()
+def get_user():
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+
+    if user:
+        return jsonify({
+            "id": user.id,
+            "email": user.email,
+        }), 200
+    else:
+        return jsonify({"message": "Utilisateur non trouvé !"}), 404
+

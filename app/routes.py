@@ -4,10 +4,12 @@ from app.models import User
 from app.models import Transaction , Fournisseur , Beneficiaire
 from werkzeug.security import check_password_hash
 from werkzeug.security import generate_password_hash
-from datetime import datetime
 from sqlalchemy import desc
+from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
+from datetime import datetime, timedelta  # Ajout correct de timedelta
 
-main = Blueprint('main', __name__) 
+main = Blueprint('main', __name__)
+
 
 ##########################################################################################
 ##########################################################################################
@@ -48,33 +50,26 @@ def login_user():
 
     # Si l'utilisateur n'existe pas ou le mot de passe est incorrect
     if user and check_password_hash(user.password, password):
-        return jsonify({"message": "Connexion réussie !"}), 200
+        access_token = create_access_token(identity=user.id, expires_delta=timedelta(hours=1))
+        return jsonify({"message": "Connexion réussie !", "token": access_token}), 200
     else:
         return jsonify({"message": "Email ou mot de passe incorrect !"}), 401
-
 
 ###############################################
 #######  Get all utilisateur ##################
 @main.route('/user', methods=['GET'])
+@jwt_required()
 def get_user():
-    email = request.args.get('email')  # Récupère l'email passé en paramètre de requête
-    
-    # Trouver l'utilisateur par email
-    user = User.query.filter_by(email=email).first()
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
 
     if user:
-        # Si l'utilisateur existe, renvoyer ses informations
         return jsonify({
             "id": user.id,
             "email": user.email,
         }), 200
     else:
-        # Si l'utilisateur n'existe pas
-        return jsonify({"message": "Utilisateur non trouvé !"}), 404 
-
-
-
-
+        return jsonify({"message": "Utilisateur non trouvé !"}), 404
 
 
 

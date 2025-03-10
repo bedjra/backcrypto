@@ -16,7 +16,8 @@ def create_app():
     jwt = JWTManager(app)
 
     # Configurer CORS
-    CORS(app)
+    CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}}, supports_credentials=True)
+
 
     # Importer et enregistrer les routes
     from .routes import main

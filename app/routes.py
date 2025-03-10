@@ -71,7 +71,61 @@ def get_user():
     else:
         return jsonify({"message": "Utilisateur non trouvé !"}), 404
 
+###############################################
+#######  info user ##################
+@main.route('/user/connecte', methods=['GET'])
+def get_current_user():
+    try:
+        user_id = session.get('user_id')  # Récupérer l'ID de l'utilisateur depuis la session
+        if not user_id:
+            return jsonify({"message": "Utilisateur non connecté"}), 401
 
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({"message": "Utilisateur non trouvé"}), 404
+
+        return jsonify({
+            "Nom": getattr(user, 'nom', "Inconnu"),
+            "Email": user.email,
+            "Rôle": getattr(user, 'role', "Non défini"),
+        }), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+###############################################
+#######  changer password ##################
+@main.route('/change', methods=['POST'])
+def change_password():
+    data = request.json
+    email = data.get('email')
+    old_password = data.get('old_password')
+    new_password = data.get('new_password')
+    confirm_password = data.get('confirm_password')
+
+    if not email or not old_password or not new_password or not confirm_password:
+        return jsonify({"message": "Tous les champs sont requis !"}), 400
+
+    # Vérifier si les deux mots de passe sont identiques
+    if new_password != confirm_password:
+        return jsonify({"message": "Les mots de passe ne correspondent pas !"}), 400
+
+    # Vérifier si l'utilisateur existe
+    user = User.query.filter_by(email=email).first()
+    if not user:
+        return jsonify({"message": "Utilisateur non trouvé !"}), 404
+
+    # Vérifier l'ancien mot de passe
+    if not check_password_hash(user.password, old_password):
+        return jsonify({"message": "Ancien mot de passe incorrect !"}), 401
+
+    # Hachage du nouveau mot de passe
+    hashed_password = generate_password_hash(new_password)
+
+    # Mise à jour du mot de passe
+    user.password = hashed_password
+    db.session.commit()
+
+    return jsonify({"message": "Mot de passe changé avec succès !"}), 200
 
 ##########################################################################################
 ##########################################################################################

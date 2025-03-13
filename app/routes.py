@@ -157,6 +157,7 @@ def ajouter_transaction():
         return jsonify({
             'message': 'Transaction ajoutée',
             'transaction': {
+                'id': transaction.id,
                 'montantFCFA': montant_fcfa,
                 'tauxConv': taux_conv,
                 'montantUSDT': montant_usdt,

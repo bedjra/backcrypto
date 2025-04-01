@@ -9,7 +9,6 @@ from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identi
 from datetime import datetime, timedelta  # Ajout correct de timedelta
 from decimal import Decimal
 
-
 main = Blueprint('main', __name__)
 
 
@@ -193,115 +192,6 @@ def gettotalbenefice():
         print("🔥 Erreur serveur:", str(e))
         return jsonify({"message": "Erreur lors de la récupération du bénéfice total", "error": str(e)}), 500
 
-
-#######################################################################################
-############## CALCUL ################## CALCUL ##################
-############## CALCUL ################## CALCUL ##################
-@main.route('/details/<int:transaction_id>', methods=['GET'])
-def get_fournisseurs_par_transaction(transaction_id):
-    try:
-        # Vérifier si la transaction existe
-        transaction = Transaction.query.get(transaction_id)
-        if not transaction:
-            return jsonify({"message": "Transaction non trouvée"}), 404
-
-        # Récupérer les fournisseurs liés à cette transaction
-        fournisseurs = Fournisseur.query.filter_by(transaction_id=transaction_id).all()
-
-        if not fournisseurs:
-            return jsonify({"message": "Aucun fournisseur trouvé pour cette transaction"}), 404
-
-        # Construire la réponse avec les bénéficiaires
-        result = []
-        for fournisseur in fournisseurs:
-            result.append({
-                "id": fournisseur.id,
-                "nom": fournisseur.nom,
-                "taux_jour": fournisseur.taux_jour,
-                "quantite_USDT": fournisseur.quantite_USDT,
-                "transaction_id": fournisseur.transaction_id,
-                "beneficiaires": [
-                    {"id": b.id, "nom": b.nom, "commission_USDT": b.commission_USDT}
-                    for b in fournisseur.beneficiaires
-                ]
-            })
-
-        return jsonify(result), 200
-
-    except Exception as e:
-        print("🔥 Erreur serveur:", str(e))
-        return jsonify({"message": "Erreur lors de la récupération", "error": str(e)}), 500
-
-
-@main.route("/cal/<int:transaction_id>", methods=["GET"])
-def get_transaction_details(transaction_id):
-    try:
-        # Vérifier si la transaction existe
-        transaction = Transaction.query.get(transaction_id)
-        if not transaction:
-            return jsonify({"message": "Transaction non trouvée"}), 404
-
-        # Récupérer les fournisseurs liés à cette transaction
-        fournisseurs = (
-    db.session.query(Fournisseur)
-    .join(TransactionFournisseur, Fournisseur.id == TransactionFournisseur.fournisseur_id)
-    .filter(TransactionFournisseur.transaction_id == transaction_id)
-    .all()
-)
-        if not fournisseurs:
-            return jsonify({"message": "Aucun fournisseur trouvé pour cette transaction"}), 404
-
-        # Calculs des bénéfices des fournisseurs
-        total_benefice_fournisseurs = 0
-        fournisseurs_list = []
-        for fournisseur in fournisseurs:
-            benefice_par_USDT = transaction.taux_convenu - fournisseur.taux_jour
-            benefice_total = benefice_par_USDT * fournisseur.quantite_USDT
-            total_benefice_fournisseurs += benefice_total
-
-            fournisseurs_list.append({
-                "fournisseur": fournisseur.nom,
-                "benefice_par_USDT": benefice_par_USDT,
-                "benefice_total_FCFA": benefice_total
-            })
-
-        # Calculs des bénéfices des bénéficiaires
-        beneficiaires_list = {}
-        for fournisseur in fournisseurs:
-            for beneficiaire in fournisseur.beneficiaires:
-                if beneficiaire.nom not in beneficiaires_list:
-                    beneficiaires_list[beneficiaire.nom] = {
-                        "commission_USDT": beneficiaire.commission_USDT,
-                        "benefice_FCFA": 0
-                    }
-                
-                benefice_beneficiaire = beneficiaire.commission_USDT * fournisseur.quantite_USDT
-                beneficiaires_list[beneficiaire.nom]["benefice_FCFA"] += benefice_beneficiaire
-
-        # Construire la réponse
-        response = {
-            "calculs_en_temps_reel": {
-                "benefices_fournisseurs": fournisseurs_list,
-                "repartition_beneficiaires": [
-                    {
-                        "beneficiaire": nom,
-                        "commission_USDT": data["commission_USDT"],
-                        "benefice_FCFA": data["benefice_FCFA"]
-                    }
-                    for nom, data in beneficiaires_list.items()
-                ],
-                "resume_global": {
-                    "benefice_total_fournisseurs": total_benefice_fournisseurs,
-                    "benefices_par_beneficiaire": beneficiaires_list
-                }
-            }
-        }
-
-        return jsonify(response), 200
-
-    except Exception as e:
-        print("🔥 Erreur serveur:", str(e))
-        return jsonify({"message": "Erreur lors de la récupération", "error": str(e)}), 500
 
 
 #########################################################################################
@@ -653,6 +543,106 @@ def adddfournisseur():
         return jsonify({"message": "Erreur lors de l'ajout", "error": str(e)}), 500
 
 
+@main.route('/update/fourn/<int:id>', methods=['PUT'])
+def update_fournisseur(id):
+    try:
+        data = request.get_json()
+        
+        # Vérifier si le fournisseur existe
+        fournisseur = Fournisseur.query.get(id)
+        if not fournisseur:
+            return jsonify({"message": "Fournisseur non trouvé"}), 404
+        
+        # Mise à jour des champs du fournisseur
+        if "nom" in data:
+            fournisseur.nom = data["nom"].strip()
+        if "taux_jour" in data:
+            try:
+                taux_jour = float(data["taux_jour"])
+                if taux_jour <= 0:
+                    return jsonify({"message": "Le taux du jour doit être positif"}), 400
+                fournisseur.taux_jour = taux_jour
+            except ValueError:
+                return jsonify({"message": "Taux du jour invalide"}), 400
+        if "quantite_USDT" in data:
+            try:
+                quantite_USDT = float(data["quantite_USDT"])
+                if quantite_USDT <= 0:
+                    return jsonify({"message": "La quantité doit être positive"}), 400
+                fournisseur.quantite_USDT = quantite_USDT
+            except ValueError:
+                return jsonify({"message": "Quantité USDT invalide"}), 400
+        
+        # Mise à jour des bénéficiaires
+        if "beneficiaires" in data:
+            beneficiaires_data = data["beneficiaires"]
+            if not isinstance(beneficiaires_data, list) or len(beneficiaires_data) == 0:
+                return jsonify({"message": "Au moins un bénéficiaire est requis"}), 400
+            
+            # Supprimer les anciens bénéficiaires
+            Beneficiaire.query.filter_by(fournisseur_id=id).delete()
+            
+            # Ajouter les nouveaux bénéficiaires
+            for benef in beneficiaires_data:
+                if not all(k in benef for k in ["nom", "commission_USDT"]):
+                    return jsonify({"message": "Données du bénéficiaire incomplètes"}), 400
+                try:
+                    commission_USDT = float(benef["commission_USDT"])
+                    if commission_USDT < 0:
+                        return jsonify({"message": "La commission doit être un nombre positif"}), 400
+                except ValueError:
+                    return jsonify({"message": "Commission invalide"}), 400
+                
+                new_benef = Beneficiaire(
+                    nom=benef["nom"].strip(),
+                    commission_USDT=commission_USDT,
+                    fournisseur_id=fournisseur.id
+                )
+                db.session.add(new_benef)
+        
+        db.session.commit()
+        
+        return jsonify({
+            "message": "Fournisseur mis à jour avec succès",
+            "fournisseur": {
+                "id": fournisseur.id,
+                "nom": fournisseur.nom,
+                "taux_jour": fournisseur.taux_jour,
+                "quantite_USDT": fournisseur.quantite_USDT,
+                "beneficiaires": [
+                    {"id": b.id, "nom": b.nom, "commission_USDT": b.commission_USDT}
+                    for b in fournisseur.beneficiaires
+                ]
+            }
+        }), 200
+    
+    except Exception as e:
+        db.session.rollback()
+        print("🔥 Erreur serveur:", str(e))
+        return jsonify({"message": "Erreur lors de la mise à jour", "error": str(e)}), 500
+
+
+@main.route('/delete/fourn/<int:id>', methods=['DELETE'])
+def deletefournisseur(id):
+    try:
+        fournisseur = Fournisseur.query.get(id)
+        if not fournisseur:
+            return jsonify({"message": "Fournisseur non trouvé"}), 404
+
+        # Supprimer les bénéficiaires liés à ce fournisseur
+        Beneficiaire.query.filter_by(fournisseur_id=id).delete()
+
+        # Supprimer le fournisseur
+        db.session.delete(fournisseur)
+        db.session.commit()
+
+        return jsonify({"message": "Fournisseur supprimé avec succès"}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        print("🔥 Erreur serveur:", str(e))
+        return jsonify({"message": "Erreur lors de la suppression", "error": str(e)}), 500
+
 
 @main.route('/all/fourn', methods=['GET'])
 def getallfournisseursssss():
@@ -967,8 +957,7 @@ def calculertransaction(transaction_id):
 
 
 
-from flask import jsonify
-from decimal import Decimal
+
 
 @main.route('/call/<int:transaction_id>', methods=['GET'])
 def calculer_transaction(transaction_id):

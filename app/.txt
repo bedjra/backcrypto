@@ -1,0 +1,337 @@
+
+
+####### formulaire AJOUT Fournisseurs ##################
+@main.route('/add/four', methods=['POST'])
+def add_fournisseur():
+    try:
+        data = request.get_json()
+
+        # Vérification des champs requis pour le fournisseur
+        required_fields = ["nom", "taux_jour", "quantite_USDT", "transaction_id", "beneficiaires"]
+        if not all(field in data for field in required_fields):
+            return jsonify({"message": "Données incomplètes"}), 400
+
+        # Récupération et validation des valeurs
+        nom = data["nom"].strip()
+        try:
+            taux_jour = float(data["taux_jour"])
+            quantite_USDT = float(data["quantite_USDT"])
+        except ValueError:
+            return jsonify({"message": "Taux du jour et quantité doivent être des nombres valides"}), 400
+
+        transaction_id = data["transaction_id"]
+        beneficiaires_data = data["beneficiaires"]
+
+        # Vérification des valeurs positives
+        if taux_jour <= 0 or quantite_USDT <= 0:
+            return jsonify({"message": "Les valeurs du taux et de la quantité doivent être positives"}), 400
+
+        # Vérifier si la transaction existe
+        transaction = Transaction.query.get(transaction_id)
+        if not transaction:
+            return jsonify({"message": "Transaction non trouvée"}), 404
+
+        # Vérifier les bénéficiaires
+        if not isinstance(beneficiaires_data, list) or len(beneficiaires_data) == 0:
+            return jsonify({"message": "Au moins un bénéficiaire est requis"}), 400
+
+        for benef in beneficiaires_data:
+            if not all(k in benef for k in ["nom", "commission_USDT"]):
+                return jsonify({"message": "Données du bénéficiaire incomplètes"}), 400
+            if not isinstance(benef["nom"], str) or not benef["nom"].strip():
+                return jsonify({"message": "Nom du bénéficiaire invalide"}), 400
+            try:
+                commission_USDT = float(benef["commission_USDT"])
+                if commission_USDT < 0:
+                    return jsonify({"message": "La commission doit être un nombre positif"}), 400
+            except ValueError:
+                return jsonify({"message": "Commission invalide"}), 400
+
+        # Création du fournisseur
+        new_fournisseur = Fournisseur(
+            nom=nom,
+            taux_jour=taux_jour,
+            quantite_USDT=quantite_USDT,
+            transaction_id=transaction_id
+        )
+
+        db.session.add(new_fournisseur)
+        db.session.flush()  # Permet d'obtenir l'ID avant le commit
+
+        # Création des bénéficiaires associés
+        for benef in beneficiaires_data:
+            new_benef = Beneficiaire(
+                nom=benef["nom"].strip(),
+                commission_USDT=float(benef["commission_USDT"]),
+                fournisseur_id=new_fournisseur.id
+            )
+            db.session.add(new_benef)
+
+        db.session.commit()  # Commit tout en une seule transaction
+
+        return jsonify({
+            "message": "Fournisseur et bénéficiaires ajoutés avec succès",
+            "fournisseur": {
+                "id": new_fournisseur.id,
+                "nom": new_fournisseur.nom,
+                "taux_jour": new_fournisseur.taux_jour,
+                "quantite_USDT": new_fournisseur.quantite_USDT,
+                "transaction_id": new_fournisseur.transaction_id,
+                "beneficiaires": [
+                    {"id": b.id, "nom": b.nom, "commission_USDT": b.commission_USDT}
+                    for b in new_fournisseur.beneficiaires
+                ]
+            }
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()  # Annule tout si une erreur survient
+        print("🔥 Erreur serveur:", str(e))
+        return jsonify({"message": "Erreur lors de l'ajout", "error": str(e)}), 500
+
+###############################################
+#######  Get all FOURNISS ##################
+@main.route('/all/four', methods=['GET'])
+def get_all_fournisseurs():
+    try:
+        # Récupération des fournisseurs triés par leur ID réel
+        fournisseurs = Fournisseur.query.order_by(Fournisseur.id).all()
+
+        # Construction de la réponse
+        result = []
+        for fournisseur in fournisseurs:
+            # Récupération des bénéficiaires associés
+            beneficiaires = Beneficiaire.query.filter_by(fournisseur_id=fournisseur.id).all()
+
+            result.append({
+                "id": fournisseur.id,  # ID réel de la base de données
+                "nom": fournisseur.nom,
+                "taux_jour": float(fournisseur.taux_jour),
+                "quantite_USDT": float(fournisseur.quantite_USDT),
+                "transaction_id": fournisseur.transaction_id,
+                "beneficiaires": [
+                    {
+                        "id": benef.id,
+                        "nom": benef.nom,
+                        "commission_USDT": float(benef.commission_USDT)
+                    } for benef in beneficiaires
+                ]
+            })
+
+        return jsonify({
+            "message": "Liste des fournisseurs récupérée avec succès",
+            "fournisseurs": result
+        }), 200
+
+    except Exception as e:
+        return jsonify({"message": "Erreur lors de la récupération des fournisseurs", "error": str(e)}), 500
+
+
+###############################################
+#######  Get all fourn NOM ##################
+@main.route('/all/four/nom', methods=['GET'])
+def get_all_fournisseurs_noms():
+    try:
+        # Récupération des fournisseurs avec uniquement id et nom
+        fournisseurs = Fournisseur.query.with_entities(Fournisseur.id, Fournisseur.nom).all()
+
+        # Construction de la réponse
+        result = [{"id": fournisseur.id, "nom": fournisseur.nom} for fournisseur in fournisseurs]
+
+        return jsonify({
+            "message": "Liste des noms des fournisseurs récupérée avec succès",
+            "fournisseurs": result
+        }), 200
+
+    except Exception as e:
+        return jsonify({"message": "Erreur lors de la récupération des noms des fournisseurs", "error": str(e)}), 500
+
+
+############################################
+#######  get by id ####################
+@main.route('/four/<int:id>', methods=['GET'])
+def get_fournisseur_by_id(id):
+    try:
+        # Récupération du fournisseur par ID
+        fournisseur = Fournisseur.query.get(id)
+
+        if not fournisseur:
+            return jsonify({"message": f"Fournisseur avec l'ID {id} introuvable"}), 404
+
+        # Récupération de la transaction associée au fournisseur
+        transaction = fournisseur.transaction
+
+        # Récupération des bénéficiaires associés au fournisseur
+        beneficiaires = Beneficiaire.query.filter_by(fournisseur_id=fournisseur.id).all()
+
+        # Construction de la réponse
+        result = {
+            "id": fournisseur.id,
+            "nom": fournisseur.nom,
+            "taux_jour": float(fournisseur.taux_jour),
+            "quantite_USDT": float(fournisseur.quantite_USDT),
+            "transaction_id": fournisseur.transaction_id,
+            "transaction": {
+                "id": transaction.id,
+                "montant_FCFA": transaction.montant_FCFA,
+                "taux_convenu": transaction.taux_convenu,
+                "montant_USDT": float(transaction.montant_USDT),
+            } if transaction else None,
+            "beneficiaires": [
+                {
+                    "id": benef.id,
+                    "nom": benef.nom,
+                    "commission_USDT": float(benef.commission_USDT)
+                } for benef in beneficiaires
+            ]
+        }
+
+        return jsonify({
+            "message": "Fournisseur récupéré avec succès",
+            "fournisseur": result
+        }), 200
+
+    except Exception as e:
+        return jsonify({"message": "Erreur lors de la récupération du fournisseur", "error": str(e)}), 500
+
+    try:
+        # Récupération du fournisseur par ID
+        fournisseur = Fournisseur.query.get(id)
+
+        if not fournisseur:
+            return jsonify({"message": f"Fournisseur avec l'ID {id} introuvable"}), 404
+
+        # Récupération des bénéficiaires associés au fournisseur
+        beneficiaires = Beneficiaire.query.filter_by(fournisseur_id=fournisseur.id).all()
+
+        # Construction de la réponse
+        result = {
+            "id": fournisseur.id,
+            "nom": fournisseur.nom,
+            "taux_jour": float(fournisseur.taux_jour),
+            "quantite_USDT": float(fournisseur.quantite_USDT),
+            "transaction_id": fournisseur.transaction_id,
+           
+            "beneficiaires": [
+                {
+                    "id": benef.id,
+                    "nom": benef.nom,
+                    "commission_USDT": float(benef.commission_USDT)
+                } for benef in beneficiaires
+            ]
+        }
+
+        return jsonify({
+            "message": "Fournisseur récupéré avec succès",
+            "fournisseur": result
+        }), 200
+
+    except Exception as e:
+        return jsonify({"message": "Erreur lors de la récupération du fournisseur", "error": str(e)}), 500
+
+
+###############################################
+#######  put four ##################
+@main.route('/update/four/<int:id>', methods=['PUT'])
+def update_fournisseur(id):
+    try:
+        data = request.get_json()
+
+        # Vérifier si le fournisseur existe
+        fournisseur = Fournisseur.query.get(id)
+        if not fournisseur:
+            return jsonify({"message": "Fournisseur non trouvé"}), 404
+
+        # Vérification des champs obligatoires
+        required_fields = ["nom", "taux_jour", "quantite_USDT", "transaction_id", "beneficiaires"]
+        if not all(field in data for field in required_fields):
+            return jsonify({"message": "Données incomplètes"}), 400
+
+        # Récupération et validation des valeurs
+        nom = data["nom"].strip()
+        try:
+            taux_jour = float(data["taux_jour"])
+            quantite_USDT = float(data["quantite_USDT"])
+        except ValueError:
+            return jsonify({"message": "Taux du jour et quantité doivent être des nombres valides"}), 400
+
+        transaction_id = data["transaction_id"]
+        beneficiaires_data = data["beneficiaires"]
+
+        # Vérifier que les valeurs sont positives
+        if taux_jour <= 0 or quantite_USDT <= 0:
+            return jsonify({"message": "Les valeurs du taux et de la quantité doivent être positives"}), 400
+
+        # Vérifier si la transaction existe
+        transaction = Transaction.query.get(transaction_id)
+        if not transaction:
+            return jsonify({"message": "Transaction non trouvée"}), 404
+
+        # Vérifier les bénéficiaires
+        if not isinstance(beneficiaires_data, list):
+            return jsonify({"message": "Format invalide pour les bénéficiaires"}), 400
+
+        for benef in beneficiaires_data:
+            if not all(k in benef for k in ["nom", "commission_USDT"]):
+                return jsonify({"message": "Données du bénéficiaire incomplètes"}), 400
+            if not isinstance(benef["nom"], str) or not benef["nom"].strip():
+                return jsonify({"message": "Nom du bénéficiaire invalide"}), 400
+            try:
+                commission_USDT = float(benef["commission_USDT"])
+                if commission_USDT < 0:
+                    return jsonify({"message": "La commission doit être un nombre positif"}), 400
+            except ValueError:
+                return jsonify({"message": "Commission invalide"}), 400
+
+        # Mise à jour des informations du fournisseur
+        fournisseur.nom = nom
+        fournisseur.taux_jour = taux_jour
+        fournisseur.quantite_USDT = quantite_USDT
+        fournisseur.transaction_id = transaction_id
+
+        # Supprimer les anciens bénéficiaires du fournisseur
+        Beneficiaire.query.filter_by(fournisseur_id=id).delete()
+
+        # Ajouter les nouveaux bénéficiaires
+        for benef in beneficiaires_data:
+            new_benef = Beneficiaire(
+                nom=benef["nom"].strip(),
+                commission_USDT=float(benef["commission_USDT"]),
+                fournisseur_id=id
+            )
+            db.session.add(new_benef)
+
+        db.session.commit()  # Commit tout en une seule transaction
+
+        return jsonify({
+            "message": "Fournisseur et bénéficiaires mis à jour avec succès",
+            "fournisseur": {
+                "id": fournisseur.id,
+                "nom": fournisseur.nom,
+                "taux_jour": fournisseur.taux_jour,
+                "quantite_USDT": fournisseur.quantite_USDT,
+                "transaction_id": fournisseur.transaction_id,
+                "beneficiaires": [
+                    {"id": b.id, "nom": b.nom, "commission_USDT": b.commission_USDT}
+                    for b in fournisseur.beneficiaires
+                ]
+            }
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()  # Annule tout en cas d'erreur
+        print("🔥 Erreur serveur:", str(e))
+        return jsonify({"message": "Erreur lors de la mise à jour", "error": str(e)}), 500
+
+##############################################
+#######  DELETE FOUR ##################
+@main.route('/delete/four/<int:id>', methods=['DELETE'])
+def delete_fournisseur(id):
+    fournisseur = Fournisseur.query.get(id)
+    if not fournisseur:
+        return jsonify({"message": "Fournisseur introuvable"}), 404
+
+    db.session.delete(fournisseur)
+    db.session.commit()
+    return jsonify({"message": "Fournisseur supprimé avec succès"}), 200
+

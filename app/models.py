@@ -1,3 +1,4 @@
+from sqlalchemy import ForeignKey
 from app import db
 from flask_sqlalchemy import SQLAlchemy
 
@@ -17,14 +18,13 @@ class Transaction(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     montant_FCFA = db.Column(db.Integer, nullable=False)
-    taux_convenu = db.Column(db.Integer, nullable=False)
-    montant_USDT = db.Column(db.Integer, nullable=False)  # Stocké en entier
+    taux_convenu = db.Column(db.Integer, nullable=False)  # Entier naturel
+    montant_USDT = db.Column(db.Numeric(10, 3), nullable=False)  # Précision à 3 décimales
     date_transaction = db.Column(db.DateTime, default=db.func.current_timestamp())
 
-    fournisseurs = db.relationship('Fournisseur', backref='transaction', lazy=True, cascade="all, delete")
-
     def __repr__(self):
-        return f"<Transaction {self.id}: {self.montant_FCFA} FCFA>"
+        return f"<Transaction {self.id}: {self.montant_FCFA} FCFA - {self.montant_USDT} USDT>"
+
 
 # Table Fournisseur
 class Fournisseur(db.Model):
@@ -32,14 +32,15 @@ class Fournisseur(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     nom = db.Column(db.String(100), nullable=False, unique=True)
-    taux_jour = db.Column(db.Integer, nullable=False)
-    quantite_USDT = db.Column(db.Integer, nullable=False)  # Stocké en entier
-    transaction_id = db.Column(db.Integer, db.ForeignKey('transactions.id'), nullable=False)
+    taux_jour = db.Column(db.Integer, nullable=False)  # Entier naturel
+    quantite_USDT = db.Column(db.Numeric(10, 3), nullable=False)  # Précision à 3 décimales
 
+    # Relation avec les bénéficiaires
     beneficiaires = db.relationship('Beneficiaire', backref='fournisseur', lazy=True, cascade="all, delete")
+    
 
     def __repr__(self):
-        return f"<Fournisseur {self.nom}: {self.taux_jour} taux>"
+        return f"<Fournisseur {self.nom}: {self.taux_jour} taux - {self.quantite_USDT} USDT>"
 
 # Table Beneficiaire
 class Beneficiaire(db.Model):
@@ -47,8 +48,19 @@ class Beneficiaire(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     nom = db.Column(db.String(100), nullable=False)
-    commission_USDT = db.Column(db.Integer, nullable=False)  # Stocké en entier
+    commission_USDT = db.Column(db.Numeric(10, 3), nullable=False)  # Précision à 3 décimales
     fournisseur_id = db.Column(db.Integer, db.ForeignKey('fournisseurs.id'), nullable=False)
 
     def __repr__(self):
         return f"<Beneficiaire {self.nom}: {self.commission_USDT} USDT>"
+
+
+
+
+
+class TransactionFournisseur(db.Model):
+    __tablename__ = 'transaction_fournisseur'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    transaction_id = db.Column(db.Integer, db.ForeignKey('transactions.id'), nullable=False)
+    fournisseur_id = db.Column(db.Integer, db.ForeignKey('fournisseurs.id'), nullable=False)

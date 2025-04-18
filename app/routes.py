@@ -8,6 +8,9 @@ from sqlalchemy import desc
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from datetime import datetime, timedelta  # Ajout correct de timedelta
 from decimal import Decimal
+from flask_jwt_extended import jwt_required, get_jwt_identity
+
+
 
 main = Blueprint('main', __name__)
 
@@ -56,6 +59,8 @@ def login_user():
     else:
         return jsonify({"message": "Email ou mot de passe incorrect !"}), 401
 
+
+
 ###############################################
 #######  Get all utilisateur ##################
 @main.route('/user', methods=['GET'])
@@ -95,38 +100,47 @@ def get_current_user():
 
 ###############################################
 #######  changer password ##################
+
+
 @main.route('/change', methods=['POST'])
+@jwt_required()
 def change_password():
-    data = request.json
-    email = data.get('email')
-    old_password = data.get('old_password')
-    new_password = data.get('new_password')
-    confirm_password = data.get('confirm_password')
+    
+    print("🟢 Route /change appelée")
 
-    if not email or not old_password or not new_password or not confirm_password:
-        return jsonify({"message": "Tous les champs sont requis !"}), 400
+    try:
+        data = request.get_json()
+        print("📦 Données reçues :", data)
 
-    # Vérifier si les deux mots de passe sont identiques
-    if new_password != confirm_password:
-        return jsonify({"message": "Les mots de passe ne correspondent pas !"}), 400
+        email = get_jwt_identity()
+        print("🔐 Identité du token :", email)
 
-    # Vérifier si l'utilisateur existe
-    user = User.query.filter_by(email=email).first()
-    if not user:
-        return jsonify({"message": "Utilisateur non trouvé !"}), 404
+        old_password = data.get('old_password')
+        new_password = data.get('new_password')
+        confirm_password = data.get('confirm_password')
 
-    # Vérifier l'ancien mot de passe
-    if not check_password_hash(user.password, old_password):
-        return jsonify({"message": "Ancien mot de passe incorrect !"}), 401
+        if not old_password or not new_password or not confirm_password:
+            return jsonify({"message": "Tous les champs sont requis !"}), 400
 
-    # Hachage du nouveau mot de passe
-    hashed_password = generate_password_hash(new_password)
+        if new_password != confirm_password:
+            return jsonify({"message": "Les mots de passe ne correspondent pas !"}), 400
 
-    # Mise à jour du mot de passe
-    user.password = hashed_password
-    db.session.commit()
+        user = User.query.filter_by(email=email).first()
+        if not user:
+            return jsonify({"message": "Utilisateur non trouvé !"}), 404
 
-    return jsonify({"message": "Mot de passe changé avec succès !"}), 200
+        if not check_password_hash(user.password, old_password):
+            return jsonify({"message": "Ancien mot de passe incorrect !"}), 401
+
+        user.password = generate_password_hash(new_password)
+        db.session.commit()
+
+        return jsonify({"message": "Mot de passe changé avec succès !"}), 200
+
+    except Exception as e:
+        print("❌ Erreur backend :", str(e))
+        return jsonify({"message": "Erreur serveur", "error": str(e)}), 500
+
 
 ##########################################################################################
 ##########################################################################################
@@ -194,274 +208,9 @@ def gettotalbenefice():
 
 
 
-#########################################################################################
-############## HISTORIQUE ################## HISTORIQUE ##################
-############## HISTORIQUE ################## HISTORIQUE ##################
-@main.route("/cal/peri", methods=["GET"])
-def getalltransactionsperio():
-    try:
-        periode = request.args.get("periode")  # Récupération du paramètre (jour, mois, annee)
-        
-        # Date du jour
-        today = datetime.today().date()
-
-        # Filtrage en fonction de la période
-        if periode == "jour":
-            start_date = today
-        elif periode == "mois":
-            start_date = today.replace(day=1)  # Début du mois en cours
-        elif periode == "annee":
-            start_date = today.replace(month=1, day=1)  # Début de l'année en cours
-        else:
-            start_date = None  # Si aucun filtre, récupérer toutes les transactions
-
-        # Récupération des transactions avec filtre de date
-        if start_date:
-            transactions = Transaction.query.filter(Transaction.date_transaction >= start_date).order_by(Transaction.id.asc()).all()
-        else:
-            transactions = Transaction.query.order_by(Transaction.id.asc()).all()
-
-        if not transactions:
-            return jsonify({"message": "Aucune transaction trouvée"}), 404
-
-        transactions_list = []
-        for transaction in transactions:
-            fournisseurs = Fournisseur.query.filter_by(transaction_id=transaction.id).all()
-            fournisseurs_list = []
-            beneficiaires_list = {}
-            total_benefice_fournisseurs = 0
-
-            for fournisseur in fournisseurs:
-                benefice_par_USDT = transaction.taux_convenu - fournisseur.taux_jour
-                benefice_total = benefice_par_USDT * fournisseur.quantite_USDT
-                total_benefice_fournisseurs += benefice_total
-
-                fournisseurs_list.append({
-                    "fournisseur": fournisseur.nom,
-                    "benefice_par_USDT": benefice_par_USDT,
-                    "benefice_total_FCFA": benefice_total
-                })
-
-                for beneficiaire in fournisseur.beneficiaires:
-                    benefice_beneficiaire = beneficiaire.commission_USDT * fournisseur.quantite_USDT
-                    if beneficiaire.nom in beneficiaires_list:
-                        beneficiaires_list[beneficiaire.nom] += benefice_beneficiaire
-                    else:
-                        beneficiaires_list[beneficiaire.nom] = benefice_beneficiaire
-
-            transactions_list.append({
-                "transaction_id": transaction.id,
-                "date_transaction": transaction.date_transaction.strftime("%Y-%m-%d"),
-                "taux_convenu": transaction.taux_convenu,
-                "montant_FCFA": transaction.montant_FCFA,
-                "montant_USDT": float(transaction.montant_USDT),  
-                "benefices_fournisseurs": fournisseurs_list,
-                "repartition_beneficiaires": [
-                    {"beneficiaire": nom, "benefice_FCFA": benefice}
-                    for nom, benefice in beneficiaires_list.items()
-                ],
-                "resume_global": {
-                    "benefice_total_fournisseurs": total_benefice_fournisseurs,
-                    "benefices_par_beneficiaire": beneficiaires_list
-                }
-            })
-
-        return jsonify({"transactions": transactions_list}), 200
-
-    except Exception as e:
-        print("🔥 Erreur serveur:", str(e))
-        return jsonify({"message": "Erreur lors de la récupération", "error": str(e)}), 500
-
-
-
-
- 
-##################################################
-############## get four et le taux ################## 
-@main.route('/four/taux', methods=['GET'])
-def get_fournisseurs():
-    try:
-        fournisseurs = Fournisseur.query.order_by(Fournisseur.id).all()
-        result = [
-            {
-                "id": fournisseur.id,
-                "nom": fournisseur.nom,
-                "taux_jour": float(fournisseur.taux_jour)
-            }
-            for fournisseur in fournisseurs
-        ]
-
-        return jsonify({
-            "message": "Liste des fournisseurs récupérée avec succès",
-            "fournisseurs": result
-        }), 200
-
-    except Exception as e:
-        return jsonify({"message": "Erreur lors de la récupération des fournisseurs", "error": str(e)}), 500
-    
-    
- 
-@main.route('/benef/all', methods=['GET'])
-def get_all_beneficiaires():
-    try:
-        beneficiaires = Beneficiaire.query.all()
-        if not beneficiaires:
-            return jsonify({"message": "Aucun bénéficiaire trouvé"}), 404
-
-        beneficiaires_list = []
-        for beneficiaire in beneficiaires:
-            fournisseur = Fournisseur.query.get(beneficiaire.fournisseur_id)
-            transaction = Transaction.query.get(fournisseur.transaction_id) if fournisseur else None
-
-            if not fournisseur or not transaction:
-                continue
-
-            benefice_beneficiaire = beneficiaire.commission_USDT * fournisseur.quantite_USDT
-
-            beneficiaires_list.append({
-                "id": beneficiaire.id,
-                "nom": beneficiaire.nom,
-                "commission_USDT": float(beneficiaire.commission_USDT),
-                "benefice_FCFA": benefice_beneficiaire
-            })
-
-        return jsonify({
-            "message": "Liste des bénéficiaires récupérée avec succès",
-            "beneficiaires": beneficiaires_list
-        }), 200
-
-    except Exception as e:
-        print("🔥 Erreur serveur:", str(e))
-        return jsonify({"message": "Erreur lors de la récupération des bénéficiaires", "error": str(e)}), 500
-      
-###################################################################################################
-#historique ###################################################################################################
-
-@main.route("/acc", methods=["GET"])
-def get_acctransactions():
-    try:
-        transactions = Transaction.query.all()
-        if not transactions:
-            return jsonify({"message": "Aucune transaction trouvée"}), 404
-
-        transactions_list = []
-        for transaction in transactions:
-            fournisseurs = Fournisseur.query.filter_by(transaction_id=transaction.id).all()
-            total_benefice = 0
-            fournisseurs_list = []
-
-            for fournisseur in fournisseurs:
-                benefice_fournisseur = (transaction.taux_convenu - fournisseur.taux_jour) * fournisseur.quantite_USDT
-                total_benefice += benefice_fournisseur
-
-                fournisseurs_list.append({
-                    "id": fournisseur.id,
-                    "nom": fournisseur.nom
-                })
-
-            transactions_list.append({
-                "date": transaction.date_transaction.strftime("%Y-%m-%d"),  # Formatage de la date
-                "montant_FCFA": transaction.montant_FCFA,
-                "fournisseurs": fournisseurs_list,
-                "benefice_total": total_benefice
-            })
-
-        return jsonify({
-            "message": "Liste des transactions récupérée avec succès",
-            "transactions": transactions_list
-        }), 200
-
-    except Exception as e:
-        print("🔥 Erreur serveur:", str(e))
-        return jsonify({"message": "Erreur lors de la récupération des transactions", "error": str(e)}), 500
-
-
-####################################################################################################
-####################################################################################################
-# Récupérer les 3 dernières transactions en les triant par date décroissante
-@main.route("/acc/last", methods=["GET"])
-def get_acclasttransactions():
-    try:
-        # Récupérer les 3 dernières transactions en les triant par date décroissante
-        transactions = Transaction.query.order_by(desc(Transaction.date_transaction)).limit(3).all()
-        if not transactions:
-            return jsonify({"message": "Aucune transaction trouvée"}), 404
-
-        transactions_list = []
-        for transaction in transactions:
-            fournisseurs = Fournisseur.query.filter_by(transaction_id=transaction.id).all()
-            total_benefice = 0
-            fournisseurs_list = []
-
-            for fournisseur in fournisseurs:
-                benefice_fournisseur = (transaction.taux_convenu - fournisseur.taux_jour) * fournisseur.quantite_USDT
-                total_benefice += benefice_fournisseur
-
-                fournisseurs_list.append({
-                    "id": fournisseur.id,
-                    "nom": fournisseur.nom
-                })
-
-            transactions_list.append({
-                "date": transaction.date_transaction.strftime("%Y-%m-%d"),  # Ajout de l'heure
-                "montant_FCFA": transaction.montant_FCFA,
-                "fournisseurs": fournisseurs_list,
-                "benefice_total": total_benefice
-            })
-
-        transactions_list.reverse()  # Inverser l'ordre pour afficher 1 -> 2 -> 3
-
-        return jsonify({
-            "message": "Dernières transactions récupérées avec succès",
-            "transactions": transactions_list
-        }), 200
-
-    except Exception as e:
-        print("🔥 Erreur serveur:", str(e))
-        return jsonify({"message": "Erreur lors de la récupération des transactions", "error": str(e)}), 500
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# PARTIE APRES EXPLICATION ## PARTIE APRES EXPLICATION ## PARTIE APRES EXPLICATION #
-# PARTIE APRES EXPLICATION #
-# PARTIE APRES EXPLICATION #
-# PARTIE APRES EXPLICATION #
 ########################################################################################    
 ##########################################################################################
 ##########################################################################################
-############## PARTIE APRES EXPLICATION ################## PARTIE APRES EXPLICATION ##################
-
-
-
-
 @main.route('/add/fourn', methods=['POST'])
 def adddfournisseur():
     try:
@@ -1037,7 +786,6 @@ def calculer_transaction(transaction_id):
     except Exception as e:
         print("🔥 Erreur serveur:", str(e))
         return jsonify({'message': 'Erreur lors de la récupération', 'error': str(e)}), 500
-
 
 
 

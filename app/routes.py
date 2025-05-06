@@ -6,7 +6,7 @@ from werkzeug.security import check_password_hash
 from werkzeug.security import generate_password_hash
 from sqlalchemy import desc
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
-from datetime import datetime, timedelta  # Ajout correct de timedelta
+from datetime import datetime, timedelta  
 from decimal import Decimal
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
@@ -19,6 +19,35 @@ main = Blueprint('main', __name__)
 ##########################################################################################
 @main.route('/save', methods=['POST'])
 def save_user():
+    """
+    Enregistrement d'un nouvel utilisateur
+    ---
+    tags:
+      - Utilisateur
+    parameters:
+      - in: body
+        name: user
+        required: true
+        schema:
+          type: object
+          required:
+            - email
+            - password
+          properties:
+            email:
+              type: string
+              example: exemple@mail.com
+            password:
+              type: string
+              example: monmotdepasse123
+    responses:
+      201:
+        description: Utilisateur enregistré avec succès
+      400:
+        description: Email ou mot de passe manquant
+      409:
+        description: Email déjà utilisé
+    """
     data = request.json
     email = data.get('email')
     password = data.get('password')
@@ -45,6 +74,31 @@ def save_user():
 ####### utilisateur login ##################
 @main.route('/login', methods=['POST'])
 def login_user():
+    """
+    Connexion de l'utilisateur
+    ---
+    tags:
+      - Auth
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          properties:
+            email:
+              type: string
+              example: "exemple@mail.com"
+            password:
+              type: string
+              example: "123456"
+    responses:
+      200:
+        description: Connexion réussie
+      401:
+        description: Email ou mot de passe incorrect
+    """
+    ...
     data = request.json
     email = data.get('email')
     password = data.get('password')
@@ -66,6 +120,20 @@ def login_user():
 @main.route('/user', methods=['GET'])
 @jwt_required()
 def get_user():
+    """
+    Obtenir les informations de l'utilisateur connecté
+    ---
+    tags:
+      - Utilisateur
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: Données utilisateur
+      404:
+        description: Utilisateur non trouvé
+    """
+    ...
     user_id = get_jwt_identity()
     user = User.query.get(user_id)
 
@@ -100,13 +168,48 @@ def get_current_user():
 
 ###############################################
 #######  changer password ##################
-
-
 @main.route('/change', methods=['POST'])
 @jwt_required()
 def change_password():
-    
-    print("🟢 Route /change appelée")
+    """
+    Changer le mot de passe de l'utilisateur connecté
+    ---
+    tags:
+      - Utilisateur
+    security:
+      - Bearer: []
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required:
+            - old_password
+            - new_password
+            - confirm_password
+          properties:
+            old_password:
+              type: string
+              example: "ancienMot123"
+            new_password:
+              type: string
+              example: "nouveauMot456"
+            confirm_password:
+              type: string
+              example: "nouveauMot456"
+    responses:
+      200:
+        description: Mot de passe changé avec succès
+      400:
+        description: Erreur de validation (champs manquants ou mot de passe non correspondant)
+      401:
+        description: Ancien mot de passe incorrect ou utilisateur non authentifié
+      404:
+        description: Utilisateur non trouvé
+      500:
+        description: Erreur serveur
+    """
 
     try:
         data = request.get_json()
@@ -154,6 +257,23 @@ def change_password():
 #######  Get all four NUMBER TOTAL ##################
 @main.route('/total/fr', methods=['GET'])
 def get_total_fournisseurs():
+    """
+    Obtenir le nombre total de fournisseurs
+    ---
+    tags:
+      - Dashboard
+    responses:
+      200:
+        description: Nombre total de fournisseurs
+        schema:
+          type: object
+          properties:
+            total_fournisseurs:
+              type: integer
+              example: 42
+    """
+    ...
+
     total_fournisseurs = Fournisseur.query.count()
     return jsonify({"total_fournisseurs": total_fournisseurs}), 200
 
@@ -162,12 +282,34 @@ def get_total_fournisseurs():
 #######  Get all transa NUMBER TOTAL ##################
 @main.route('/total/tr', methods=['GET'])
 def get_total_transactions():
+    """
+    Obtenir le nombre total de transactions
+    ---
+    tags:
+      - Dashboard
+    responses:
+      200:
+        description: Nombre total de transactions
+        schema:
+          type: object
+          properties:
+            total:
+              type: integer
+              example: 105
+    """
+    ...
+
     total_transactions = Transaction.query.count()  # Compter le nombre total de transactions
     return jsonify({"total": total_transactions}), 200
 
     
+
+#######################################################
+#######################################################
+
 @main.route('/total/trs', methods=['GET'])
 def gettotal_transactions():
+       
     transactions = Transaction.query.with_entities(Transaction.id).all()  # Récupérer tous les IDs
     transaction_ids = [t.id for t in transactions]  # Extraire les IDs sous forme de liste
     
@@ -177,6 +319,23 @@ def gettotal_transactions():
 #######  Get all transa NUMBER TOTAL ##################
 @main.route('/total/bn', methods=['GET'])
 def get_total_beneficiaires():
+    """
+    Obtenir le nombre total de bénéficiaires
+    ---
+    tags:
+      - Dashboard
+    responses:
+      200:
+        description: Nombre total de bénéficiaires
+        schema:
+          type: object
+          properties:
+            total_beneficiaires:
+              type: integer
+              example: 12
+    """
+    ...
+    
     total_beneficiaires = Beneficiaire.query.count()
     return jsonify({"total_beneficiaires": total_beneficiaires}), 200
 
@@ -185,9 +344,30 @@ def get_total_beneficiaires():
 
 
 #######################################################
-#######  Get all BENEFICE TOTAL ##################
 @main.route('/total/been', methods=['GET'])
 def gettotalbenefice():
+    """
+    Calculer le bénéfice global total sur toutes les transactions
+    ---
+    tags:
+      - Dashboard
+    responses:
+      200:
+        description: Bénéfice total calculé avec succès
+        schema:
+          type: object
+          properties:
+            benefice_global_total:
+              type: number
+              format: float
+              example: 1234.56
+      404:
+        description: Aucune transaction trouvée
+      500:
+        description: Erreur lors du calcul du bénéfice
+    """
+    ...
+
     try:
         transactions = Transaction.query.all()
         if not transactions:
@@ -208,11 +388,90 @@ def gettotalbenefice():
 
 
 
+@main.route('/four/taux', methods=['GET'])
+def get_taux_transactions():
+    """
+    Récupérer le taux des transactions avec l'ID du fournisseur et son nom
+    ---
+    tags:
+      - Transactions
+    responses:
+      200:
+        description: Liste des taux des transactions
+      500:
+        description: Erreur lors de la récupération
+    """
+    try:
+        # Récupération des fournisseurs avec leur taux
+        fournisseurs = Fournisseur.query.order_by(Fournisseur.id).all()
+
+        result = []
+        for fournisseur in fournisseurs:
+            result.append({
+                "id": fournisseur.id,
+                "fournisseur": fournisseur.nom,
+                "taux": float(fournisseur.taux_jour)
+            })
+
+        return jsonify({
+            "message": "Taux des transactions récupérés avec succès",
+            "transactions_taux": result
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            "message": "Erreur lors de la récupération des taux des transactions",
+            "error": str(e)
+        }), 500
+
 ########################################################################################    
 ##########################################################################################
-##########################################################################################
+#########################     TRANSACTION    #############################################
 @main.route('/add/fourn', methods=['POST'])
 def adddfournisseur():
+    """
+    Ajouter un nouveau fournisseur et ses bénéficiaires
+    ---
+    tags:
+      - Fournisseurs
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required: [nom, taux_jour, quantite_USDT, beneficiaires]
+          properties:
+            nom:
+              type: string
+              example: "Fournisseur A"
+            taux_jour:
+              type: number
+              example: 900.5
+            quantite_USDT:
+              type: number
+              example: 1000
+            beneficiaires:
+              type: array
+              items:
+                type: object
+                properties:
+                  nom:
+                    type: string
+                    example: "Bénéficiaire 1"
+                  commission_USDT:
+                    type: number
+                    example: 10.5
+    responses:
+      201:
+        description: Fournisseur créé avec succès
+      400:
+        description: Données invalides
+      500:
+        description: Erreur serveur
+    """
+    ...
+
     try:
         data = request.get_json()
 
@@ -294,6 +553,53 @@ def adddfournisseur():
 
 @main.route('/update/fourn/<int:id>', methods=['PUT'])
 def update_fournisseur(id):
+    """
+    Mettre à jour un fournisseur et ses bénéficiaires
+    ---
+    tags:
+      - Fournisseurs
+    parameters:
+      - in: path
+        name: id
+        type: integer
+        required: true
+        description: ID du fournisseur
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          properties:
+            nom:
+              type: string
+              example: "Nouveau nom"
+            taux_jour:
+              type: number
+              example: 890.0
+            quantite_USDT:
+              type: number
+              example: 1200
+            beneficiaires:
+              type: array
+              items:
+                type: object
+                properties:
+                  nom:
+                    type: string
+                  commission_USDT:
+                    type: number
+    responses:
+      200:
+        description: Fournisseur mis à jour
+      400:
+        description: Données invalides
+      404:
+        description: Fournisseur non trouvé
+      500:
+        description: Erreur serveur
+    """
+    ...
+
     try:
         data = request.get_json()
         
@@ -373,6 +679,27 @@ def update_fournisseur(id):
 
 @main.route('/delete/fourn/<int:id>', methods=['DELETE'])
 def deletefournisseur(id):
+    """
+    Supprimer un fournisseur et ses bénéficiaires associés
+    ---
+    tags:
+      - Fournisseurs
+    parameters:
+      - in: path
+        name: id
+        type: integer
+        required: true
+        description: ID du fournisseur
+    responses:
+      200:
+        description: Fournisseur supprimé avec succès
+      404:
+        description: Fournisseur non trouvé
+      500:
+        description: Erreur serveur
+    """
+    ...
+
     try:
         fournisseur = Fournisseur.query.get(id)
         if not fournisseur:
@@ -393,8 +720,22 @@ def deletefournisseur(id):
         return jsonify({"message": "Erreur lors de la suppression", "error": str(e)}), 500
 
 
+
 @main.route('/all/fourn', methods=['GET'])
 def getallfournisseursssss():
+    """
+    Récupérer la liste de tous les fournisseurs avec leurs bénéficiaires
+    ---
+    tags:
+      - Fournisseurs
+    responses:
+      200:
+        description: Liste des fournisseurs
+      500:
+        description: Erreur lors de la récupération
+    """
+    ...
+
     try:
         # Récupération de tous les fournisseurs triés par leur ID
         fournisseurs = Fournisseur.query.order_by(Fournisseur.id).all()
@@ -425,9 +766,21 @@ def getallfournisseursssss():
         return jsonify({"message": "Erreur lors de la récupération des fournisseurs", "error": str(e)}), 500
 
 
-
 @main.route('/alll/ben', methods=['GET'])
 def getall_beneficiaires():
+    """
+    Récupérer tous les bénéficiaires
+    ---
+    tags:
+      - Bénéficiaires
+    responses:
+      200:
+        description: Liste des bénéficiaires
+      500:
+        description: Erreur lors de la récupération
+    """
+    ...
+
     try:
         # Récupération de tous les bénéficiaires de tous les fournisseurs
         beneficiaires = Beneficiaire.query.all()
@@ -455,6 +808,89 @@ def getall_beneficiaires():
 ####### formulaire AJOUT TRANSACTION ##################
 @main.route('/trans/addd', methods=['POST'])
 def ajoutetransaction():
+    """
+    Ajouter une nouvelle transaction
+    ---
+    tags:
+      - Transactions
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              montantFCFA:
+                type: number
+                description: Montant en FCFA
+                example: 150000
+              tauxConv:
+                type: number
+                description: Taux de conversion en USDT
+                example: 950
+              fournisseursIds:
+                type: array
+                description: Liste des IDs des fournisseurs associés
+                items:
+                  type: integer
+                example: [1, 3]
+              fournisseurId:
+                type: integer
+                description: Fournisseur unique si fournisseursIds n'est pas fourni
+                example: 2
+            required:
+              - montantFCFA
+              - tauxConv
+    responses:
+      201:
+        description: Transaction ajoutée avec succès
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: Transaction ajoutée
+                transaction:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                      example: 5
+                    montantFCFA:
+                      type: number
+                      example: 150000
+                    tauxConv:
+                      type: number
+                      example: 950
+                    montantUSDT:
+                      type: number
+                      example: 157.89
+                    dateTransaction:
+                      type: string
+                      format: date-time
+                      example: "2025-05-05T12:30:00"
+                    fournisseurs:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          id:
+                            type: integer
+                            example: 1
+                          nom:
+                            type: string
+                            example: Binance Togo
+      400:
+        description: Données invalides ou fournisseur manquant
+      404:
+        description: Un ou plusieurs fournisseurs introuvables
+      500:
+        description: Erreur interne du serveur
+    """
+
+    
     try:
         data = request.json
         print("📩 Données reçues:", data)
@@ -523,6 +959,52 @@ def ajoutetransaction():
 #######  Get all TRANSACTION ##################
 @main.route('/trans/alll', methods=['GET'])
 def getAlltransactions():
+    """
+    Récupérer toutes les transactions
+    ---
+    tags:
+      - Transactions
+    responses:
+      200:
+        description: Liste de toutes les transactions
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                    example: 1
+                  montantFCFA:
+                    type: number
+                    example: 200000
+                  tauxConv:
+                    type: number
+                    example: 950
+                  montantUSDT:
+                    type: number
+                    example: 210.53
+                  dateTransaction:
+                    type: string
+                    format: date-time
+                    example: "2025-05-05T14:30:00"
+                  fournisseurs:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                          example: 2
+                        nom:
+                          type: string
+                          example: Binance Togo
+      500:
+        description: Erreur interne du serveur
+    """
+
     try:
         transactions = Transaction.query.all()
         result = []
@@ -551,9 +1033,81 @@ def getAlltransactions():
         return jsonify({'message': 'Erreur interne', 'error': str(e)}), 500
 
 
-
 @main.route('/tran/<int:transaction_id>', methods=['GET'])
 def getTransactionById(transaction_id):
+    """
+    Récupérer une transaction par son ID
+    ---
+    tags:
+      - Transactions
+    parameters:
+      - name: transaction_id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: ID de la transaction à récupérer
+    responses:
+      200:
+        description: Détails de la transaction
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: integer
+                  example: 1
+                montantFCFA:
+                  type: number
+                  example: 150000
+                tauxConv:
+                  type: number
+                  example: 920
+                montantUSDT:
+                  type: number
+                  example: 163.04
+                dateTransaction:
+                  type: string
+                  format: date-time
+                  example: "2025-05-05T15:30:00"
+                fournisseurs:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        example: 3
+                      nom:
+                        type: string
+                        example: "Fournisseur A"
+                      tauxJour:
+                        type: number
+                        example: 910
+                      quantiteUSDT:
+                        type: number
+                        example: 100.0
+                      beneficiaires:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: integer
+                              example: 1
+                            nom:
+                              type: string
+                              example: "Jean Dupont"
+                            commissionUSDT:
+                              type: number
+                              example: 10.0
+      404:
+        description: Transaction non trouvée
+      500:
+        description: Erreur interne du serveur
+    """
+
     try:
         transaction = Transaction.query.get(transaction_id)
         
@@ -595,6 +1149,54 @@ def getTransactionById(transaction_id):
 
 @main.route('/trans/delete/<int:transaction_id>', methods=['DELETE'])
 def supprimer_transaction(transaction_id):
+    """
+    Supprimer une transaction par son ID
+    ---
+    tags:
+      - Transactions
+    parameters:
+      - name: transaction_id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: ID de la transaction à supprimer
+    responses:
+      200:
+        description: Transaction supprimée avec succès
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: Transaction supprimée avec succès
+      404:
+        description: Transaction introuvable
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: Transaction introuvable
+      500:
+        description: Erreur interne du serveur
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: Erreur interne
+                error:
+                  type: string
+                  example: Description de l'erreur technique
+    """
+
     try:
         transaction = Transaction.query.get(transaction_id)
         
@@ -619,12 +1221,85 @@ def supprimer_transaction(transaction_id):
 
 #######################################################################################
 ############## CALCUL ################## CALCUL ##################
-############## CALCUL ################## CALCUL ##################
-
-
-
 @main.route('/cal/<int:transaction_id>', methods=['GET'])
 def calculertransaction(transaction_id):
+    """
+    Calculer les commissions et la répartition d'une transaction
+    ---
+    tags:
+      - Calculs
+    parameters:
+      - name: transaction_id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: ID de la transaction à calculer
+    responses:
+      200:
+        description: Résultat du calcul de la transaction
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                transaction_id:
+                  type: integer
+                  example: 1
+                montant_total_USDT:
+                  type: number
+                  format: float
+                  example: 122.3
+                repartition:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      fournisseur_id:
+                        type: integer
+                        example: 2
+                      fournisseur_nom:
+                        type: string
+                        example: Binance
+                      montant_total_beneficiaires:
+                        type: number
+                        example: 102.5
+                      beneficiaires:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            nom:
+                              type: string
+                              example: John Doe
+                            commission_USDT:
+                              type: number
+                              example: 50.25
+      404:
+        description: Transaction introuvable
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: Transaction non trouvée
+      500:
+        description: Erreur interne du serveur
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: Erreur interne
+                error:
+                  type: string
+                  example: Détails de l'erreur
+    """
+
     try:
         transaction = Transaction.query.get(transaction_id)
         if not transaction:
@@ -710,6 +1385,83 @@ def calculertransaction(transaction_id):
 
 @main.route('/call/<int:transaction_id>', methods=['GET'])
 def calculer_transaction(transaction_id):
+    """
+    Calculer les informations de la transaction et ses répartition de bénéfices
+    ---
+    tags:
+      - Calculs
+    parameters:
+      - name: transaction_id
+        in: path
+        required: true
+        description: L'ID de la transaction à calculer
+        schema:
+          type: integer
+    responses:
+      200:
+        description: Calcul réussi avec détails des commissions et répartition
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                transaction_id:
+                  type: integer
+                  example: 1
+                montant_total_USDT:
+                  type: number
+                  format: float
+                  example: 122.3
+                repartition:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      fournisseur_id:
+                        type: integer
+                        example: 2
+                      fournisseur_nom:
+                        type: string
+                        example: Binance
+                      montant_total_beneficiaires:
+                        type: number
+                        example: 102.5
+                      beneficiaires:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            nom:
+                              type: string
+                              example: John Doe
+                            commission_USDT:
+                              type: number
+                              example: 50.25
+      404:
+        description: Transaction non trouvée
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: Transaction introuvable
+      500:
+        description: Erreur serveur
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: Erreur interne
+                error:
+                  type: string
+                  example: "Détails de l'erreur"
+    """
+
     try:
         transaction = Transaction.query.get(transaction_id)
         if not transaction:
@@ -795,10 +1547,10 @@ def calculer_transaction(transaction_id):
 #########################################################################################
 ############## HISTORIQUE ################## HISTORIQUE ##################
 ############## HISTORIQUE ################## HISTORIQUE ##################
-
-
 @main.route("/cal/perid", methods=["GET"])
 def get_all_transactions_periode():
+
+
     try:
         periode = request.args.get("periode")  # Paramètre pour filtrer (jour, semaine, mois, annee)
         

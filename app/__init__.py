@@ -3,7 +3,6 @@ from flask_jwt_extended import JWTManager
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS 
 from flasgger import Swagger
-from .routes import main
 
 
 # Déclaration de l'instance SQLAlchemy
@@ -24,6 +23,7 @@ def create_app():
 
 
     # Importer et enregistrer les routes
+    from .routes import main
     app.register_blueprint(main)
 
     # Créer les tables si elles n'existent pas

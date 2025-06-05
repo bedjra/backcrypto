@@ -78,7 +78,7 @@ def login_user():
     Connexion de l'utilisateur
     ---
     tags:
-      - Auth
+      - Utilisateur
     parameters:
       - in: body
         name: body
